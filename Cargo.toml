@@ -1,0 +1,16 @@
+[package]
+name = "wirelint"
+version = "0.1.0"
+edition = "2021"
+description = "Zero-dependency Rust structural auditor for cryptographic wire formats (ASN.1 DER, RFC 7515 JWS/JWT, RFC 8949/8152 COSE CBOR)"
+license = "MIT"
+repository = "https://github.com/PRAVIN-952006/wirelint"
+keywords = ["cryptography", "security", "asn1", "jws", "cbor"]
+categories = ["cryptography", "command-line-utilities", "parser-implementations"]
+
+[dependencies]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
