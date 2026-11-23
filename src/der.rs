@@ -285,10 +285,8 @@ fn check_universal_primitive(tag: u8, offset: usize, content: &[u8], findings: &
                 }
             }
         }
-        TAG_UTF8_STRING => {
-            if std::str::from_utf8(content).is_err() {
-                findings.push(Finding::error("DER015", offset, "invalid UTF-8 inside DER UTF8String"));
-            }
+        TAG_UTF8_STRING if std::str::from_utf8(content).is_err() => {
+            findings.push(Finding::error("DER015", offset, "invalid UTF-8 inside DER UTF8String"));
         }
         _ => {}
     }
