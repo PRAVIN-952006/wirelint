@@ -1,0 +1,45 @@
+name: "WireLint Crypto Wire-Format Auditor"
+description: "Zero-dependency Rust fail-closed auditor for ASN.1 DER, RFC 7515 JWS/JWT, and RFC 8949/8152 COSE CBOR with SARIF 2.1.0."
+author: "Pravin G"
+branding:
+  icon: "lock"
+  color: "blue"
+
+inputs:
+  format:
+    description: "Wire format to audit: der, jws, or cbor."
+    required: true
+  path:
+    description: "Path to the raw artifact file to audit."
+    required: true
+  crit:
+    description: "Optional comma-separated RFC 7515 §4.1.11 critical header allowlist (for jws)."
+    required: false
+    default: ""
+  sarif-file:
+    description: "Optional output path to write a SARIF 2.1.0 report for GitHub Code Scanning."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build wirelint (zero external crates)
+      shell: bash
+      run: cargo build --release --manifest-path "${{ github.action_path }}/Cargo.toml"
+
+    - name: Run wirelint audit
+      shell: bash
+      run: |
+        BIN="${{ github.action_path }}/target/release/wirelint"
+        ARGS=(audit --format "${{ inputs.format }}" "${{ inputs.path }}")
+        if [ -n "${{ inputs.crit }}" ]; then
+          ARGS+=(--crit "${{ inputs.crit }}")
+        fi
+        if [ -n "${{ inputs.sarif-file }}" ]; then
+          "$BIN" "${ARGS[@]}" --sarif > "${{ inputs.sarif-file }}" || EXIT_CODE=$?
+          "$BIN" "${ARGS[@]}" || true
+          exit "${EXIT_CODE:-0}"
+        else
+          "$BIN" "${ARGS[@]}"
+        fi

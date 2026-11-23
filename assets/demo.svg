@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="400" viewBox="0 0 880 400" role="img" aria-label="wirelint terminal demo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+  </defs>
+  <rect width="880" height="400" rx="12" fill="url(#bg)" stroke="#30363d" stroke-width="1.5"/>
+  <rect width="880" height="36" rx="12" fill="#161b22"/>
+  <rect y="24" width="880" height="12" fill="#161b22"/>
+  <circle cx="22" cy="18" r="6" fill="#ff5f56"/>
+  <circle cx="42" cy="18" r="6" fill="#ffbd2e"/>
+  <circle cx="62" cy="18" r="6" fill="#27c93f"/>
+  <text x="440" y="22" fill="#8b949e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" text-anchor="middle">wirelint v0.1.0 — Zero-Dependency Rust Cryptographic Wire-Format Auditor</text>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
+    <text x="24" y="66" fill="#7ee787">$ wirelint self-test</text>
+    <text x="24" y="92" fill="#58a6ff" font-weight="bold">wirelint</text>
+    <text x="98" y="92" fill="#8b949e">— ASN.1 DER (ITU-T X.690) · RFC 7515 JWS/JWT · RFC 8949/8152 COSE CBOR</text>
+
+    <text x="24" y="126" fill="#3fb950" font-weight="bold">[PASS]</text>
+    <text x="86" y="126" fill="#c9d1d9">ASN.1 DER canonical baseline (15 rules: DER001-DER015)</text>
+
+    <text x="24" y="152" fill="#3fb950" font-weight="bold">[PASS]</text>
+    <text x="86" y="152" fill="#c9d1d9">RFC 7515 Compact JWS baseline (10 rules: JWS001-JWS010, crit &amp; dup-key)</text>
+
+    <text x="24" y="178" fill="#3fb950" font-weight="bold">[PASS]</text>
+    <text x="86" y="178" fill="#c9d1d9">RFC 8949 Core Deterministic CBOR baseline (9 rules: CBOR001-CBOR009)</text>
+
+    <text x="24" y="218" fill="#7ee787">$ wirelint audit --format jws --sarif sample_token.jws</text>
+
+    <text x="24" y="248" fill="#ff7b72" font-weight="bold">[FAIL]</text>
+    <text x="86" y="248" fill="#f0f6fc" font-weight="bold">JWS004</text>
+    <text x="148" y="248" fill="#c9d1d9">Duplicate JSON key "alg" in JWS protected header (offset 24)</text>
+
+    <text x="24" y="276" fill="#ff7b72" font-weight="bold">[FAIL]</text>
+    <text x="86" y="276" fill="#f0f6fc" font-weight="bold">JWS007</text>
+    <text x="148" y="276" fill="#c9d1d9">Unsupported RFC 7515 critical header extension "x-ext"</text>
+
+    <text x="24" y="304" fill="#ffa657" font-weight="bold">[WARN]</text>
+    <text x="86" y="304" fill="#f0f6fc" font-weight="bold">JWS009</text>
+    <text x="148" y="304" fill="#c9d1d9">Embedded key-material header ("jku") present — verify trust anchor</text>
+
+    <text x="24" y="348" fill="#d2a8ff">Status: FAIL (fail-closed)  |  0 external crates  |  panic-free  |  SARIF 2.1.0</text>
+    <text x="24" y="374" fill="#8b949e">Sub-microsecond cryptographic parser guard  •  Rust std only</text>
+  </g>
+</svg>

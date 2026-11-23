@@ -2,6 +2,8 @@
 
 **Zero-dependency, fail-closed Rust structural auditor for cryptographic wire formats (ASN.1 DER, RFC 7515 JWS/JWT, and RFC 8949/8152 COSE CBOR).**
 
+![wirelint demo](assets/demo.svg)
+
 Cryptographic parser differentials—where one verifier accepts a non-canonical encoding, duplicate header key, or trailing garbage that another rejects—are a recurring root cause of signature-malleability, authentication, and bypass bugs. `wirelint` is a standalone, panic-free, zero-crate Rust library and CLI that audits raw wire artifacts against strict RFC canonicalization rules and emits text, JSON, or **SARIF 2.1.0** diagnostics.
 
 ```
@@ -36,6 +38,23 @@ cargo run --release -- self-test
 cargo run --release -- audit --format der  path/to/artifact.der
 cargo run --release -- audit --format jws  --crit x-tenant path/to/token.jws --sarif
 cargo run --release -- audit --format cbor path/to/cose.cbor --json
+```
+
+## GitHub Actions Integration (Drop-In Action)
+
+```yaml
+- name: Audit cryptographic wire artifact
+  uses: PRAVIN-952006/wirelint@v0.1.0
+  with:
+    format: jws
+    path: path/to/token.jws
+    sarif-file: wirelint.sarif
+
+- name: Upload SARIF to GitHub Security
+  if: always()
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: wirelint.sarif
 ```
 
 ## Design Principles
