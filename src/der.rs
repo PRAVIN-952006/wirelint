@@ -174,12 +174,11 @@ fn parse_tlv(buf: &[u8], offset: usize, depth: usize, findings: &mut Vec<Finding
     let content = &buf[pos..content_end];
 
     if is_constructed {
-        // Constructed primitive tags (ITU-T X.690 §10.2) are forbidden in DER.
+        // Per ITU-T X.690 §10.2, only EXTERNAL (0x08), EMBEDDED PDV (0x0B), SEQUENCE (0x10),
+        // SET (0x11), and CHARACTER STRING (0x1D) may be constructed in DER universal class.
         if (first_tag & 0xC0) == 0
-            && matches!(
-                tag_num,
-                0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x0C | 0x12 | 0x13 | 0x16 | 0x17 | 0x18 | 0x1A | 0x1C | 0x1E
-            )
+            && tag_num != 0x1F
+            && !matches!(tag_num, 0x08 | 0x0B | 0x10 | 0x11 | 0x1D)
         {
             findings.push(Finding::error(
                 "DER009",

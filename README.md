@@ -21,7 +21,7 @@ raw bytes / token
 
 | Format | Rule IDs | Security & Canonicalization Invariants Enforced |
 | :--- | :--- | :--- |
-| **ASN.1 DER** | `DER001`–`DER015` | Rejects indefinite length (`0x80`), non-minimal long-form lengths, leading-zero lengths, constructed primitive tags, non-canonical `BOOLEAN` (`!= 0x00/0xFF`), non-minimal `INTEGER` sign octets, non-zero `BIT STRING` padding bits, non-minimal OID subidentifiers, invalid UTF-8, depth `> 32`, truncation/OOM lengths, and trailing bytes |
+| **ASN.1 DER** | `DER001`–`DER016` | Rejects indefinite length (`0x80`), non-minimal long-form lengths, leading-zero lengths, constructed primitive tags (X.690 §10.2), non-canonical `BOOLEAN` (`!= 0x00/0xFF`), non-minimal `INTEGER` sign octets, non-zero `BIT STRING` padding bits, non-minimal/unterminated OID VLQ subidentifiers, invalid UTF-8, unsorted `SET OF` elements (X.690 §11.6), depth `> 32`, truncation/OOM lengths, and trailing bytes |
 | **RFC 7515 JWS** | `JWS001`–`JWS010` | Enforces 3-part compact serialization, canonical unpadded Base64URL (rejects `=` and non-zero trailing bits), strict JSON parser rejecting **duplicate object keys**, rejects `alg: none` & empty signatures, enforces **RFC 7515 §4.1.11 `crit`** against caller's allowlist, and warns on embedded key headers (`jwk`, `jku`, `x5u`) |
 | **RFC 8949/8152 CBOR** | `CBOR001`–`CBOR009` | Rejects indefinite-length items (`ai=31`), non-minimal integer/length encodings, invalid UTF-8 text strings, **duplicate map keys**, non-canonical bytewise map key ordering (§4.2.1), depth `> 32`, truncation/OOM counts, and trailing bytes |
 
