@@ -24,6 +24,9 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
     - name: Build wirelint (zero external crates)
       shell: bash
       run: cargo build --release --manifest-path "${{ github.action_path }}/Cargo.toml"

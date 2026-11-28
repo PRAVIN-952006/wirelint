@@ -174,18 +174,40 @@ fn parse_tlv(buf: &[u8], offset: usize, depth: usize, findings: &mut Vec<Finding
     let content = &buf[pos..content_end];
 
     if is_constructed {
-        // Constructed primitive tags (e.g., constructed OCTET STRING / BIT STRING) are forbidden in DER.
-        if (first_tag & 0xC0) == 0 && matches!(tag_num, 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x0C) {
+        // Constructed primitive tags (ITU-T X.690 §10.2) are forbidden in DER.
+        if (first_tag & 0xC0) == 0
+            && matches!(
+                tag_num,
+                0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x0C | 0x12 | 0x13 | 0x16 | 0x17 | 0x18 | 0x1A | 0x1C | 0x1E
+            )
+        {
             findings.push(Finding::error(
                 "DER009",
                 offset,
                 format!("constructed encoding forbidden in DER for universal tag 0x{:02x}", tag_num),
             ));
         }
+        let is_set = first_tag == 0x31;
+        let mut prev_child: Option<&[u8]> = None;
         let mut child_pos = pos;
         while child_pos < content_end {
             match parse_tlv(buf, child_pos, depth + 1, findings) {
-                Some(next) if next > child_pos => child_pos = next,
+                Some(next) if next > child_pos => {
+                    if is_set {
+                        let curr = &buf[child_pos..next];
+                        if let Some(prev) = prev_child {
+                            if prev > curr {
+                                findings.push(Finding::error(
+                                    "DER016",
+                                    child_pos,
+                                    "DER SET/SET OF elements are not in canonical ascending lexicographical order (X.690 §11.6)",
+                                ));
+                            }
+                        }
+                        prev_child = Some(curr);
+                    }
+                    child_pos = next;
+                }
                 _ => return None,
             }
         }
@@ -308,5 +330,20 @@ mod tests {
 
         let valid_multibyte = audit_der(&[0x06, 0x03, 0x81, 0x80, 0x50]);
         assert!(valid_multibyte.is_clean(), "valid OID 2.16384 must not trigger DER014");
+    }
+
+    #[test]
+    fn enforces_x690_constructed_primitives_and_set_of_ordering() {
+        // Constructed PrintableString (0x33 = 0x20 | 0x13) is forbidden in DER
+        let bad_str = audit_der(&[0x33, 0x03, 0x13, 0x01, b'A']);
+        assert!(bad_str.findings.iter().any(|f| f.rule_id == "DER009"));
+
+        // Unsorted SET OF: INTEGER 2 (02 01 02) before INTEGER 1 (02 01 01)
+        let unsorted_set = audit_der(&[0x31, 0x06, 0x02, 0x01, 0x02, 0x02, 0x01, 0x01]);
+        assert!(unsorted_set.findings.iter().any(|f| f.rule_id == "DER016"));
+
+        // Sorted SET OF: INTEGER 1 before INTEGER 2
+        let sorted_set = audit_der(&[0x31, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02]);
+        assert!(sorted_set.is_clean());
     }
 }
