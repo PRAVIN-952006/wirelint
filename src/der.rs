@@ -260,7 +260,7 @@ fn check_universal_primitive(tag: u8, offset: usize, content: &[u8], findings: &
             if content.is_empty() {
                 findings.push(Finding::error("DER014", offset, "empty DER OBJECT IDENTIFIER"));
             } else {
-                let mut i = 1;
+                let mut i = 0;
                 while i < content.len() {
                     if content[i] == 0x80 {
                         findings.push(Finding::error(
@@ -289,5 +289,24 @@ fn check_universal_primitive(tag: u8, offset: usize, content: &[u8], findings: &
             findings.push(Finding::error("DER015", offset, "invalid UTF-8 inside DER UTF8String"));
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validates_first_oid_subidentifier_vlq_canonically() {
+        let unterminated = audit_der(&[0x06, 0x01, 0x81]);
+        assert!(!unterminated.is_clean());
+        assert!(unterminated.findings.iter().any(|f| f.rule_id == "DER014"));
+
+        let non_minimal = audit_der(&[0x06, 0x02, 0x80, 0x01]);
+        assert!(!non_minimal.is_clean());
+        assert!(non_minimal.findings.iter().any(|f| f.rule_id == "DER014"));
+
+        let valid_multibyte = audit_der(&[0x06, 0x03, 0x81, 0x80, 0x50]);
+        assert!(valid_multibyte.is_clean(), "valid OID 2.16384 must not trigger DER014");
     }
 }

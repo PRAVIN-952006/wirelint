@@ -28,7 +28,7 @@ raw bytes / token
 ## Quick Start
 
 ```bash
-# Build & run all 17 adversarial RFC compliance tests (zero external crates)
+# Build & run the full adversarial & unit RFC compliance test suite (zero external crates)
 cargo test
 
 # Run built-in baseline verification & sub-microsecond throughput benchmark
