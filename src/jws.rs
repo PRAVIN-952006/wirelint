@@ -416,10 +416,13 @@ impl<'a> StrictJsonParser<'a> {
         let mut out = String::new();
         while self.pos < self.bytes.len() {
             let b = self.bytes[self.pos];
-            self.pos += 1;
             match b {
-                b'"' => return Some(out),
+                b'"' => {
+                    self.pos += 1;
+                    return Some(out);
+                }
                 b'\\' => {
+                    self.pos += 1;
                     if self.pos >= self.bytes.len() {
                         findings.push(Finding::error("JWS004", self.pos, "truncated JSON escape"));
                         return None;
@@ -436,17 +439,48 @@ impl<'a> StrictJsonParser<'a> {
                         b'r' => out.push('\r'),
                         b't' => out.push('\t'),
                         b'u' => {
-                            if self.pos + 4 > self.bytes.len() {
-                                findings.push(Finding::error("JWS004", self.pos, "truncated \\u escape"));
-                                return None;
-                            }
-                            let hex = std::str::from_utf8(&self.bytes[self.pos..self.pos + 4]).ok()?;
-                            let code = u32::from_str_radix(hex, 16).ok()?;
-                            self.pos += 4;
-                            if let Some(ch) = char::from_u32(code) {
+                            let code = self.parse_hex4(findings)?;
+                            if (0xD800..=0xDBFF).contains(&code) {
+                                if self.pos + 2 > self.bytes.len()
+                                    || self.bytes[self.pos] != b'\\'
+                                    || self.bytes[self.pos + 1] != b'u'
+                                {
+                                    findings.push(Finding::error(
+                                        "JWS004",
+                                        self.pos,
+                                        "unpaired UTF-16 high surrogate in JSON escape",
+                                    ));
+                                    return None;
+                                }
+                                self.pos += 2;
+                                let low = self.parse_hex4(findings)?;
+                                if !(0xDC00..=0xDFFF).contains(&low) {
+                                    findings.push(Finding::error(
+                                        "JWS004",
+                                        self.pos,
+                                        "invalid UTF-16 low surrogate in JSON escape",
+                                    ));
+                                    return None;
+                                }
+                                let scalar = 0x10000 + (((code - 0xD800) << 10) | (low - 0xDC00));
+                                if let Some(ch) = char::from_u32(scalar) {
+                                    out.push(ch);
+                                } else {
+                                    findings.push(Finding::error(
+                                        "JWS004",
+                                        self.pos,
+                                        "invalid Unicode scalar in JSON surrogate pair",
+                                    ));
+                                    return None;
+                                }
+                            } else if let Some(ch) = char::from_u32(code) {
                                 out.push(ch);
                             } else {
-                                findings.push(Finding::error("JWS004", self.pos, "invalid Unicode scalar in JSON escape"));
+                                findings.push(Finding::error(
+                                    "JWS004",
+                                    self.pos,
+                                    "invalid Unicode scalar in JSON escape",
+                                ));
                                 return None;
                             }
                         }
@@ -457,14 +491,46 @@ impl<'a> StrictJsonParser<'a> {
                     }
                 }
                 c if c < 0x20 => {
-                    findings.push(Finding::error("JWS004", self.pos - 1, "unescaped control character in JSON string"));
+                    findings.push(Finding::error("JWS004", self.pos, "unescaped control character in JSON string"));
                     return None;
                 }
-                c => out.push(c as char),
+                c if c < 0x80 => {
+                    self.pos += 1;
+                    out.push(c as char);
+                }
+                _ => {
+                    let Ok(rest) = std::str::from_utf8(&self.bytes[self.pos..]) else {
+                        findings.push(Finding::error("JWS004", self.pos, "invalid UTF-8 in JSON string"));
+                        return None;
+                    };
+                    let Some(ch) = rest.chars().next() else {
+                        findings.push(Finding::error("JWS004", self.pos, "unexpected EOF in JSON string"));
+                        return None;
+                    };
+                    out.push(ch);
+                    self.pos += ch.len_utf8();
+                }
             }
         }
         findings.push(Finding::error("JWS004", self.pos, "unterminated JSON string"));
         None
+    }
+
+    fn parse_hex4(&mut self, findings: &mut Vec<Finding>) -> Option<u32> {
+        if self.pos + 4 > self.bytes.len() {
+            findings.push(Finding::error("JWS004", self.pos, "truncated \\u escape"));
+            return None;
+        }
+        let Ok(hex) = std::str::from_utf8(&self.bytes[self.pos..self.pos + 4]) else {
+            findings.push(Finding::error("JWS004", self.pos, "invalid UTF-8 in \\u escape"));
+            return None;
+        };
+        let Ok(code) = u32::from_str_radix(hex, 16) else {
+            findings.push(Finding::error("JWS004", self.pos, "invalid hex digits in \\u escape"));
+            return None;
+        };
+        self.pos += 4;
+        Some(code)
     }
 
     fn expect_lit(&mut self, lit: &[u8], findings: &mut Vec<Finding>) -> bool {
@@ -479,19 +545,113 @@ impl<'a> StrictJsonParser<'a> {
 
     fn parse_number(&mut self, findings: &mut Vec<Finding>) -> bool {
         let start = self.pos;
-        if self.bytes[self.pos] == b'-' {
+        if self.pos < self.bytes.len() && self.bytes[self.pos] == b'-' {
             self.pos += 1;
         }
-        while self.pos < self.bytes.len()
-            && matches!(self.bytes[self.pos], b'0'..=b'9' | b'.' | b'e' | b'E' | b'+' | b'-')
-        {
-            self.pos += 1;
-        }
-        if self.pos == start {
+        if self.pos >= self.bytes.len() {
             findings.push(Finding::error("JWS004", start, "invalid JSON number"));
-            false
-        } else {
-            true
+            return false;
         }
+        match self.bytes[self.pos] {
+            b'0' => {
+                self.pos += 1;
+                if self.pos < self.bytes.len() && self.bytes[self.pos].is_ascii_digit() {
+                    findings.push(Finding::error("JWS004", start, "leading zero in JSON number"));
+                    return false;
+                }
+            }
+            b'1'..=b'9' => {
+                self.pos += 1;
+                while self.pos < self.bytes.len() && self.bytes[self.pos].is_ascii_digit() {
+                    self.pos += 1;
+                }
+            }
+            _ => {
+                findings.push(Finding::error("JWS004", start, "invalid JSON number"));
+                return false;
+            }
+        }
+        if self.pos < self.bytes.len() && self.bytes[self.pos] == b'.' {
+            self.pos += 1;
+            let frac_start = self.pos;
+            while self.pos < self.bytes.len() && self.bytes[self.pos].is_ascii_digit() {
+                self.pos += 1;
+            }
+            if self.pos == frac_start {
+                findings.push(Finding::error("JWS004", start, "invalid fractional JSON number"));
+                return false;
+            }
+        }
+        if self.pos < self.bytes.len() && matches!(self.bytes[self.pos], b'e' | b'E') {
+            self.pos += 1;
+            if self.pos < self.bytes.len() && matches!(self.bytes[self.pos], b'+' | b'-') {
+                self.pos += 1;
+            }
+            let exp_start = self.pos;
+            while self.pos < self.bytes.len() && self.bytes[self.pos].is_ascii_digit() {
+                self.pos += 1;
+            }
+            if self.pos == exp_start {
+                findings.push(Finding::error("JWS004", start, "invalid exponent in JSON number"));
+                return false;
+            }
+        }
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn b64url_encode(data: &[u8]) -> String {
+        const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let mut out = String::new();
+        let mut i = 0;
+        while i < data.len() {
+            let b0 = data[i];
+            let b1 = if i + 1 < data.len() { data[i + 1] } else { 0 };
+            let b2 = if i + 2 < data.len() { data[i + 2] } else { 0 };
+            out.push(TABLE[(b0 >> 2) as usize] as char);
+            out.push(TABLE[(((b0 & 0x03) << 4) | (b1 >> 4)) as usize] as char);
+            if i + 1 < data.len() {
+                out.push(TABLE[(((b1 & 0x0f) << 2) | (b2 >> 6)) as usize] as char);
+            }
+            if i + 2 < data.len() {
+                out.push(TABLE[(b2 & 0x3f) as usize] as char);
+            }
+            i += 3;
+        }
+        out
+    }
+
+    #[test]
+    fn rejects_malformed_unicode_escape_fail_closed() {
+        let jws = format!("{}.e30.AAAA", b64url_encode(br#"{"\uZZZZ":1}"#));
+        let report = audit_jws(&jws, &[]);
+        assert!(!report.is_clean(), "malformed \\u escape must never pass");
+        assert!(report.findings.iter().any(|f| f.rule_id == "JWS004"));
+    }
+
+    #[test]
+    fn detects_duplicate_utf8_and_escaped_keys() {
+        let header = "{\"alg\":\"EdDSA\",\"\u{00e9}\":1,\"\\u00e9\":2}";
+        let jws = format!("{}.e30.AAAA", b64url_encode(header.as_bytes()));
+        let report = audit_jws(&jws, &[]);
+        assert!(!report.is_clean());
+        assert!(report.findings.iter().any(|f| f.rule_id == "JWS010"));
+    }
+
+    #[test]
+    fn accepts_valid_utf16_surrogate_pair_and_rejects_malformed_numbers() {
+        let ok_hdr = r#"{"alg":"EdDSA","emoji":"\uD83D\uDE00"}"#;
+        let ok_jws = format!("{}.e30.AAAA", b64url_encode(ok_hdr.as_bytes()));
+        assert!(audit_jws(&ok_jws, &[]).is_clean());
+
+        let bad_num_hdr = r#"{"alg":"EdDSA","n":1..2}"#;
+        let bad_jws = format!("{}.e30.AAAA", b64url_encode(bad_num_hdr.as_bytes()));
+        let report = audit_jws(&bad_jws, &[]);
+        assert!(!report.is_clean());
+        assert!(report.findings.iter().any(|f| f.rule_id == "JWS004"));
     }
 }

@@ -43,7 +43,12 @@ fn run_audit(args: &[String]) {
             "--crit" => {
                 i += 1;
                 if let Some(ext) = args.get(i) {
-                    crit_exts.push(ext.clone());
+                    for part in ext.split(',') {
+                        let trimmed = part.trim();
+                        if !trimmed.is_empty() {
+                            crit_exts.push(trimmed.to_string());
+                        }
+                    }
                 }
             }
             "--json" => out_mode = "json",

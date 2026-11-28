@@ -30,14 +30,19 @@ runs:
 
     - name: Run wirelint audit
       shell: bash
+      env:
+        WIRELINT_FORMAT: ${{ inputs.format }}
+        WIRELINT_PATH: ${{ inputs.path }}
+        WIRELINT_CRIT: ${{ inputs.crit }}
+        WIRELINT_SARIF_FILE: ${{ inputs.sarif-file }}
       run: |
         BIN="${{ github.action_path }}/target/release/wirelint"
-        ARGS=(audit --format "${{ inputs.format }}" "${{ inputs.path }}")
-        if [ -n "${{ inputs.crit }}" ]; then
-          ARGS+=(--crit "${{ inputs.crit }}")
+        ARGS=(audit --format "$WIRELINT_FORMAT" "$WIRELINT_PATH")
+        if [ -n "$WIRELINT_CRIT" ]; then
+          ARGS+=(--crit "$WIRELINT_CRIT")
         fi
-        if [ -n "${{ inputs.sarif-file }}" ]; then
-          "$BIN" "${ARGS[@]}" --sarif > "${{ inputs.sarif-file }}" || EXIT_CODE=$?
+        if [ -n "$WIRELINT_SARIF_FILE" ]; then
+          "$BIN" "${ARGS[@]}" --sarif > "$WIRELINT_SARIF_FILE" || EXIT_CODE=$?
           "$BIN" "${ARGS[@]}" || true
           exit "${EXIT_CODE:-0}"
         else
