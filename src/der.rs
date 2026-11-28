@@ -199,7 +199,7 @@ fn parse_tlv(buf: &[u8], offset: usize, depth: usize, findings: &mut Vec<Finding
                                 findings.push(Finding::error(
                                     "DER016",
                                     child_pos,
-                                    "DER SET/SET OF elements are not in canonical ascending lexicographical order (X.690 §11.6)",
+                                    "DER SET OF elements are not in canonical ascending lexicographical order (X.690 §11.6)",
                                 ));
                             }
                         }
@@ -219,6 +219,13 @@ fn parse_tlv(buf: &[u8], offset: usize, depth: usize, findings: &mut Vec<Finding
 
 fn check_universal_primitive(tag: u8, offset: usize, content: &[u8], findings: &mut Vec<Finding>) {
     match tag {
+        0x08 | 0x0B | 0x10 | 0x11 | 0x1D => {
+            findings.push(Finding::error(
+                "DER009",
+                offset,
+                format!("primitive encoding forbidden in DER for universal tag 0x{:02x}", tag),
+            ));
+        }
         TAG_BOOLEAN => {
             if content.len() != 1 || (content[0] != 0x00 && content[0] != 0xFF) {
                 findings.push(Finding::error(
@@ -336,6 +343,16 @@ mod tests {
         // Constructed PrintableString (0x33 = 0x20 | 0x13) is forbidden in DER
         let bad_str = audit_der(&[0x33, 0x03, 0x13, 0x01, b'A']);
         assert!(bad_str.findings.iter().any(|f| f.rule_id == "DER009"));
+
+        // Primitive-encoded constructed-only universal tags are forbidden in DER (X.690 §8.9.1/§8.11.1)
+        for tag in [0x08u8, 0x0B, 0x10, 0x11, 0x1D] {
+            let bad_prim = audit_der(&[tag, 0x00]);
+            assert!(
+                bad_prim.findings.iter().any(|f| f.rule_id == "DER009"),
+                "primitive tag 0x{:02x} must trigger DER009",
+                tag
+            );
+        }
 
         // Unsorted SET OF: INTEGER 2 (02 01 02) before INTEGER 1 (02 01 01)
         let unsorted_set = audit_der(&[0x31, 0x06, 0x02, 0x01, 0x02, 0x02, 0x01, 0x01]);
